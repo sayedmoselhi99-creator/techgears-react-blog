@@ -39,6 +39,55 @@ export default function Footer({ pages = [] }) {
                   Home
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/about"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                  About
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/contact"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/privacy-policy"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/affiliate-disclosure"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                  Affiliate Disclosure
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/terms-conditions"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                 Terms and Conditions
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/disclaimer"
+                  className="text-gray-700 hover:text-blue-600 transition"
+                >
+                 Disclaimer
+                </Link>
+              </li>
+
               {pages.slice(0, 6).map((p) => (
                 <li key={p.slug}>
                   <Link
@@ -48,6 +97,7 @@ export default function Footer({ pages = [] }) {
                     {p.title}
                   </Link>
                 </li>
+                
               ))}
             </ul>
           </div>
