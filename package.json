@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
-    "build": "npx vite build && node scripts/generate-sitemap.js"
+    "build": "npx vite build && node scripts/generate-sitemap.js && node indexing.js"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -15,6 +15,7 @@
     "@vercel/speed-insights": "^1.2.0",
     "firebase": "^12.4.0",
     "firebase-admin": "^13.5.0",
+    "googleapis": "^165.0.0",
     "he": "^1.2.0",
     "lucide-react": "^0.552.0",
     "node-fetch": "^3.3.2",
@@ -30,5 +31,18 @@
     "tailwindcss": "^3.4.6",
     "vite": "^5.0.0",
     "vite-plugin-sitemap": "^0.8.2"
-  }
+  },
+  "description": "Tech Gears Finds4You v3 - local build. Run npm install && npm run dev.",
+  "main": "indexing.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sayedmoselhi99-creator/techgears-react-blog.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sayedmoselhi99-creator/techgears-react-blog/issues"
+  },
+  "homepage": "https://github.com/sayedmoselhi99-creator/techgears-react-blog#readme"
 }
