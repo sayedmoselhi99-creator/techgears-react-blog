@@ -1,100 +1,77 @@
-import { google } from "googleapis";
-import fetch from "node-fetch";
-import { parseStringPromise } from "xml2js";
+// indexing.js
 import fs from "fs";
 import path from "path";
+import fetch from "node-fetch";
+import { google } from "googleapis";
 
-// ✅ CONFIGURATION
-const SITEMAP_URL = "https://techgearsfinds4you.vercel.app/sitemap.xml";
-const KEY_PATH = path.resolve("D:/keys/techgears-indexing-automation-55bd1920c9b5.json");
+// --- Load credentials automatically ---
+let credentials;
 
-// ----------------------------------------------
-
-async function authenticate() {
-  try {
-    if (!fs.existsSync(KEY_PATH)) {
-      throw new Error(`Key file not found: ${KEY_PATH}`);
+try {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    // ✅ Running on Vercel (or any environment with env var)
+    credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+    console.log("✅ Loaded credentials from environment variable");
+  } else {
+    // ✅ Local fallback
+    const keyPath = path.resolve("./keys/techgears-indexing-automation-55bd1920c9b5.json");
+    if (fs.existsSync(keyPath)) {
+      credentials = JSON.parse(fs.readFileSync(keyPath, "utf8"));
+      console.log("✅ Loaded credentials from local file");
+    } else {
+      throw new Error("Key file not found and environment variable not set");
     }
-
-    const auth = new google.auth.GoogleAuth({
-      keyFile: KEY_PATH,
-      scopes: ["https://www.googleapis.com/auth/indexing"],
-    });
-
-    const client = await auth.getClient();
-    console.log("✅ Authenticated with Google Indexing API.");
-    return client;
-  } catch (err) {
-    console.error("❌ Authentication failed:", err.message);
-    process.exit(1);
   }
+} catch (err) {
+  console.error("❌ Failed to load Google credentials:", err.message);
+  process.exit(1);
 }
 
-async function getUrlsFromSitemap(url) {
+// --- Initialize Google Indexing API ---
+const auth = new google.auth.GoogleAuth({
+  credentials,
+  scopes: ["https://www.googleapis.com/auth/indexing"],
+});
+const indexing = google.indexing({ version: "v3", auth });
+
+// --- Helper: notify Google to index a URL ---
+async function notifyGoogle(url) {
   try {
-    console.log(`📥 Fetching sitemap from: ${url}`);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch sitemap: ${res.statusText}`);
-
-    const xml = await res.text();
-    const data = await parseStringPromise(xml);
-
-    const urls = [];
-    if (data.urlset && data.urlset.url) {
-      for (const u of data.urlset.url) {
-        if (u.loc && u.loc[0]) urls.push(u.loc[0]);
-      }
-    } else if (data.sitemapindex && data.sitemapindex.sitemap) {
-      // Handle sitemap index (multiple sitemaps)
-      for (const s of data.sitemapindex.sitemap) {
-        if (s.loc && s.loc[0]) {
-          const subUrls = await getUrlsFromSitemap(s.loc[0]);
-          urls.push(...subUrls);
-        }
-      }
-    }
-
-    console.log(`🗂️ Found ${urls.length} URLs in sitemap.`);
-    return urls;
-  } catch (err) {
-    console.error("❌ Failed to parse sitemap:", err.message);
-    return [];
-  }
-}
-
-async function requestIndexing(client, url) {
-  try {
-    const indexing = google.indexing({ version: "v3", auth: client });
-
     const res = await indexing.urlNotifications.publish({
-      requestBody: {
-        url: url,
-        type: "URL_UPDATED", // or "URL_DELETED" if needed
-      },
+      requestBody: { url, type: "URL_UPDATED" },
     });
-
-    console.log(`📤 Submitted: ${url}`);
-    if (res.data.urlNotificationMetadata) {
-      console.log(`🕓 Status: ${res.data.urlNotificationMetadata.latestUpdate?.type || "Success"}`);
-    }
+    console.log(`✅ Indexed: ${url}`);
+    return res.data;
   } catch (err) {
-    console.error(`❌ Failed to submit ${url}:`, err.message);
+    console.error(`❌ Error indexing ${url}:`, err.message);
   }
 }
 
+// --- Helper: parse sitemap.xml and extract URLs ---
+async function parseSitemap(sitemapUrl) {
+  console.log(`🌐 Fetching sitemap from: ${sitemapUrl}`);
+  const res = await fetch(sitemapUrl);
+  const xml = await res.text();
+
+  const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
+  console.log(`✅ Found ${urls.length} URLs in sitemap`);
+  return urls;
+}
+
+// --- Main execution ---
 (async () => {
-  const client = await authenticate();
-  const urls = await getUrlsFromSitemap(SITEMAP_URL);
+  const sitemapUrl = "https://techgearsfinds4you.vercel.app/sitemap.xml"; // change if needed
+  const urls = await parseSitemap(sitemapUrl);
 
-  if (urls.length === 0) {
-    console.error("⚠️ No URLs found in sitemap. Exiting.");
-    return;
+   for (const url of urls) {
+    await notifyGoogle(url);
+    await new Promise((r) => setTimeout(r, 2000)); // delay to avoid hitting API rate limits
   }
 
-  for (const url of urls) {
-    await requestIndexing(client, url);
-    await new Promise((r) => setTimeout(r, 2000)); // Wait 2s between requests
-  }
+  console.log("🎉 All URLs have been submitted to Google Indexing API!");
+})().catch((err) => {
+  console.error("❌ Fatal error:", err);
+  process.exit(1);
+});
 
-  console.log("🎉 All sitemap URLs submitted for indexing!");
-})();
+
