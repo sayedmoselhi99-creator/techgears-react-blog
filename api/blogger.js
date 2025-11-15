@@ -6,7 +6,9 @@ const BLOG_ID = "5906335048599841803";
 const BASE_URL = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}`;
 const CACHE_TTL = 1000 * 60 * 10; // 10 minutes cache
 
+// ------------------------------------------------------------
 // ✅ Normalize paths like /2025/10/my-post.html
+// ------------------------------------------------------------
 function normalizePath(path) {
   if (!path) return "";
   let clean = path.trim();
@@ -15,7 +17,9 @@ function normalizePath(path) {
   return clean.replace(/\/+/g, "/");
 }
 
+// ------------------------------------------------------------
 // ✅ Cache helpers
+// ------------------------------------------------------------
 function getCache(key) {
   try {
     const data = localStorage.getItem(key);
@@ -38,21 +42,27 @@ function setCache(key, value) {
   }
 }
 
-// ✅ General fetch wrapper with retry + rate-limit handling
+// ------------------------------------------------------------
+// ✅ Safe fetch with retry + rate-limit handling
+// ------------------------------------------------------------
 async function safeFetch(url, retries = 2, delay = 1000) {
   for (let i = 0; i <= retries; i++) {
     const res = await fetch(url);
+
     if (res.status === 429 && i < retries) {
       console.warn(`Rate limit hit. Retrying in ${delay}ms...`);
       await new Promise((r) => setTimeout(r, delay));
       continue;
     }
+
     if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
     return await res.json();
   }
 }
 
-// ✅ Fetch all posts (Home page)
+// ------------------------------------------------------------
+// ✅ Fetch posts for Home page
+// ------------------------------------------------------------
 export async function fetchPosts(pageToken = "") {
   const cacheKey = `posts_${pageToken || "first"}`;
   const cached = getCache(cacheKey);
@@ -75,7 +85,9 @@ export async function fetchPosts(pageToken = "") {
   return result;
 }
 
+// ------------------------------------------------------------
 // ✅ Fetch posts by label (Category page)
+// ------------------------------------------------------------
 export async function fetchPostsByLabel(label, pageToken = "") {
   const cacheKey = `label_${label}_${pageToken || "first"}`;
   const cached = getCache(cacheKey);
@@ -99,50 +111,91 @@ export async function fetchPostsByLabel(label, pageToken = "") {
   return result;
 }
 
-// ✅ Fetch a single post by its path
+// ------------------------------------------------------------
+// ✅ Fetch a post by path (used internally by slug function)
+// ------------------------------------------------------------
 export async function fetchPostByPath(path) {
   const normalizedPath = normalizePath(path);
   const cacheKey = `post_${normalizedPath}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
-  const baseUrl = `${BASE_URL}/posts/bypath?key=${API_KEY}&path=${encodeURIComponent(
+  const url = `${BASE_URL}/posts/bypath?key=${API_KEY}&path=${encodeURIComponent(
     normalizedPath
   )}`;
 
   let data;
+
   try {
-    data = await safeFetch(baseUrl);
+    data = await safeFetch(url);
   } catch (err) {
-    // Handle "not found" fallback to slug search
     if (err.message.includes("404")) {
-      console.warn(`Post not found for path: ${normalizedPath}. Searching by slug...`);
-      const slug = normalizedPath.split("/").pop().replace(".html", "");
-      const searchUrl = `${BASE_URL}/posts/search?q=${slug}&key=${API_KEY}`;
-      const searchData = await safeFetch(searchUrl.toString());
-      data = searchData.items?.[0] || null;
-      if (!data) throw new Error(`Post not found for slug: ${slug}`);
-    } else {
-      throw err;
+      console.warn(`404 for path ${normalizedPath}`);
+      throw err; // handled by slug-fallback
     }
+    throw err;
   }
 
   setCache(cacheKey, data);
   return data;
 }
 
-// ✅ Fetch post by slug wrapper
+// ------------------------------------------------------------
+// ⭐ ⭐ ⭐  FIXED VERSION — Fetch post by slug (never breaks)
+// ------------------------------------------------------------
 export async function fetchPostBySlug(slug) {
+  // ------------------------------------------------------------
+  // 1) Try label: slug:my-slug
+  // ------------------------------------------------------------
+  const labelUrl = `${BASE_URL}/posts?labels=slug:${slug}&key=${API_KEY}`;
+
   try {
-    const path = `/2025/10/${slug}.html`; // Default month fallback
-    return await fetchPostByPath(path);
-  } catch (error) {
-    console.error("❌ Error in fetchPostBySlug:", error);
-    throw error;
+    const labelData = await safeFetch(labelUrl);
+    if (labelData.items && labelData.items.length > 0) {
+      return labelData.items[0];
+    }
+  } catch {}
+
+  // ------------------------------------------------------------
+  // 2) Try Blogger Search (most reliable fallback)
+  // ------------------------------------------------------------
+  const searchUrl = `${BASE_URL}/posts/search?q=${slug}&key=${API_KEY}`;
+
+  try {
+    const searchData = await safeFetch(searchUrl);
+    if (searchData.items && searchData.items.length > 0) {
+      return searchData.items[0];
+    }
+  } catch {}
+
+  // ------------------------------------------------------------
+  // 3) Try scanning likely Blogger URL paths (YYYY/MM/slug.html)
+  // ------------------------------------------------------------
+  const years = ["2023", "2024", "2025", "2026"];
+  const months = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+
+  for (const year of years) {
+    for (const month of months) {
+      const path = `/${year}/${month}/${slug}.html`;
+
+      try {
+        const post = await fetchPostByPath(path);
+        if (post && post.id) return post;
+      } catch {
+        continue;
+      }
+    }
   }
+
+  // ------------------------------------------------------------
+  // ❌ Still nothing found?
+  // ------------------------------------------------------------
+  throw new Error(`Post not found for slug: ${slug}`);
 }
 
-// ✅ Normalize Blogger post data
+// ------------------------------------------------------------
+// ✅ Post normalization
+// ------------------------------------------------------------
 export function normalizePosts(rawPosts = []) {
   return rawPosts.map((p) => {
     const title =
