@@ -8,27 +8,37 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const siteUrl = "https://techgearsfinds4you.vercel.app";
 
+// --- Escape special characters for XML ---
+function escapeXml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 async function fetchAllPosts() {
   const { data, error } = await supabase
     .from("posts")
-    .select("slug, created_at") // use created_at since updated_at doesn't exist
+    .select("slug, created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  return data || [];
 }
 
 async function generateSitemap() {
   try {
     console.log("⏳ Fetching all Supabase posts...");
     const posts = await fetchAllPosts();
-    console.log(`✅ Fetched ${posts.length} posts.`);
+    console.log(`✅ Fetched ${posts.length} total posts.`);
 
     const urls = posts
       .map((post) => {
         return `
   <url>
-    <loc>${siteUrl}/post/${post.slug}</loc>
+    <loc>${escapeXml(`${siteUrl}/post/${post.slug}`)}</loc>
     <lastmod>${new Date(post.created_at).toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -46,10 +56,9 @@ async function generateSitemap() {
   ${urls}
 </urlset>`;
 
-    // Ensure /dist folder exists
     if (!fs.existsSync("./dist")) fs.mkdirSync("./dist");
-
     fs.writeFileSync("./dist/sitemap.xml", xml);
+
     console.log("🎉 Sitemap generated successfully at dist/sitemap.xml!");
   } catch (err) {
     console.error("❌ Failed to generate sitemap:", err);
