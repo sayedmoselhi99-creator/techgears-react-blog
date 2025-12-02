@@ -1,40 +1,35 @@
 import fs from "fs";
-import fetch from "node-fetch";
+import { createClient } from "@supabase/supabase-js";
 
-const API_KEY = "AIzaSyAMT4TjiiFmLeHcZGTe6VLSi9kVOrlVFGg";
-const BLOG_ID = "5906335048599841803";
+// --- Supabase config ---
+const SUPABASE_URL = "https://idkwiphboefqdefwcvrl.supabase.co"; // replace with your Supabase URL
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlka3dpcGhib2VmcWRlZndjdnJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NDg0NTUsImV4cCI6MjA4MDEyNDQ1NX0.xdNW-gFw2m2vAy0jhCrYHItbZenP9p4sZSwt99S9fuw"; // replace with anon/public key
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const siteUrl = "https://techgearsfinds4you.vercel.app";
 
 async function fetchAllPosts() {
-  let posts = [];
-  let nextPageToken = "";
-  do {
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}&maxResults=100${
-      nextPageToken ? `&pageToken=${nextPageToken}` : ""
-    }`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch Blogger posts: ${res.status}`);
-    const data = await res.json();
-    posts = posts.concat(data.items || []);
-    nextPageToken = data.nextPageToken;
-  } while (nextPageToken);
-  return posts;
+  const { data, error } = await supabase
+    .from("posts")
+    .select("slug, created_at") // use created_at since updated_at doesn't exist
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data;
 }
 
 async function generateSitemap() {
   try {
-    console.log("⏳ Fetching all Blogger posts...");
+    console.log("⏳ Fetching all Supabase posts...");
     const posts = await fetchAllPosts();
-
-    console.log(`✅ Fetched ${posts.length} total posts.`);
+    console.log(`✅ Fetched ${posts.length} posts.`);
 
     const urls = posts
       .map((post) => {
-        const slug = post.url.split("/").pop().replace(".html", "");
         return `
   <url>
-    <loc>${siteUrl}/post/${slug}</loc>
-    <lastmod>${new Date(post.updated).toISOString()}</lastmod>
+    <loc>${siteUrl}/post/${post.slug}</loc>
+    <lastmod>${new Date(post.created_at).toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>`;
