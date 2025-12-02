@@ -1,199 +1,313 @@
-import React, { useState, useEffect } from "react";
+// src/lib/admin/admin-panel.jsx
+import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 
-export default function AdminPanel() {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [status, setStatus] = useState("");
-  const [posts, setPosts] = useState([]);
-  const [editingPost, setEditingPost] = useState(null);
+/* ---------- Helpers ---------- */
+// SEO-friendly slug generator
+function generateSlug(title) {
+  return title
+    .toString()
+    .normalize("NFKD")
+    .replace(/[\u2013\u2014]/g, "-") // en/em dash -> -
+    .replace(/&/g, " and ") // & -> and
+    .replace(/[^a-zA-Z0-9\s-]/g, "") // remove special chars
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
-  // --- Load all posts ---
+// small safe HTML escape for titles in modals (not for content)
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/* ---------- Component ---------- */
+export default function AdminPanel() {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  // form state
+  const [editingPost, setEditingPost] = useState(null);
+  const [title, setTitle] = useState("");
+  const [contentHtml, setContentHtml] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  // view modal
+  const [viewPost, setViewPost] = useState(null);
+
+  // pagination (optional simple)
+  const [pageSize] = useState(20);
+
   useEffect(() => {
     loadPosts();
   }, []);
 
   async function loadPosts() {
+    setLoading(true);
+    setError("");
     try {
       const { data, error } = await supabase
         .from("posts")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(pageSize);
 
       if (error) throw error;
       setPosts(data || []);
     } catch (err) {
       console.error(err);
-      setStatus("Failed to load posts");
+      setError("Failed to load posts");
+    } finally {
+      setLoading(false);
     }
   }
 
-  // --- Handle Add / Update ---
-  const handleSubmit = async (e) => {
+  // create or update
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (!title || !content) return alert("Title and content are required");
+    setStatus("");
+    setError("");
 
-    setStatus("Saving...");
+    if (!title.trim() || !contentHtml.trim()) {
+      setError("Title and content are required.");
+      return;
+    }
 
-    const slug = title.toLowerCase().replace(/\s+/g, "-");
+    const slug = generateSlug(title);
 
     try {
       if (editingPost) {
-        // Update existing post
+        // update
+        const payload = {
+          title: title.trim(),
+          slug,
+          content_html: contentHtml,
+          image_url: imageUrl || null,
+          updated_at: new Date().toISOString(),
+        };
+
         const { error } = await supabase
           .from("posts")
-          .update({ title, slug, content_html: content, image_url: imageUrl })
+          .update(payload)
           .eq("id", editingPost.id);
+
         if (error) throw error;
-        setStatus("Post updated successfully!");
+        setStatus("Post updated.");
       } else {
-        // Create new post
-        const { error } = await supabase.from("posts").insert([
-          {
-            title,
-            slug,
-            content_html: content,
-            image_url: imageUrl,
-          },
-        ]);
+        // insert
+        const payload = {
+          title: title.trim(),
+          slug,
+          content_html: contentHtml,
+          image_url: imageUrl || null,
+        };
+
+        const { error } = await supabase.from("posts").insert([payload]);
         if (error) throw error;
-        setStatus("Post saved successfully!");
+        setStatus("Post created.");
       }
 
-      // Reset form
-      setTitle("");
-      setContent("");
-      setImageUrl("");
-      setEditingPost(null);
-
-      loadPosts();
+      // reset
+      resetForm();
+      await loadPosts();
     } catch (err) {
       console.error(err);
-      setStatus("Error: " + err.message);
+      setError(err.message || "Save failed");
     }
-  };
-
-  // --- Handle Edit ---
-  function handleEdit(post) {
-    setEditingPost(post);
-    setTitle(post.title);
-    setContent(post.content_html);
-    setImageUrl(post.image_url);
   }
 
-  // --- Handle Delete ---
-  async function handleDelete(postId) {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
+  function handleEdit(post) {
+    setEditingPost(post);
+    setTitle(post.title || "");
+    setContentHtml(post.content_html || "");
+    setImageUrl(post.image_url || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetForm() {
+    setEditingPost(null);
+    setTitle("");
+    setContentHtml("");
+    setImageUrl("");
+  }
+
+  async function handleDelete(id) {
+    if (!confirm("Delete this post? This cannot be undone.")) return;
+    setStatus("");
+    setError("");
     try {
-      const { error } = await supabase.from("posts").delete().eq("id", postId);
+      const { error } = await supabase.from("posts").delete().eq("id", id);
       if (error) throw error;
-      setStatus("Post deleted successfully!");
+      setStatus("Post deleted.");
       loadPosts();
     } catch (err) {
       console.error(err);
-      setStatus("Error deleting post");
+      setError("Delete failed");
     }
+  }
+
+  // View in modal
+  function handleView(post) {
+    setViewPost(post);
+  }
+  function closeView() {
+    setViewPost(null);
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">
-        {editingPost ? "Edit Post" : "Create New Post"}
-      </h1>
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">{editingPost ? "Edit Post" : "Create New Post"}</h1>
 
-      {/* --- Post Form --- */}
-      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-        <div>
+      {/* status */}
+      {status && <div className="mb-4 text-green-700 bg-green-50 p-2 rounded">{status}</div>}
+      {error && <div className="mb-4 text-red-700 bg-red-50 p-2 rounded">{error}</div>}
+
+      {/* form */}
+      <form onSubmit={handleSubmit} className="mb-8 bg-white p-5 rounded shadow">
+        <div className="mb-3">
           <label className="block mb-1 font-semibold">Title</label>
           <input
-            type="text"
-            className="w-full border p-2 rounded"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label className="block mb-1 font-semibold">Content (HTML)</label>
-          <textarea
-            className="w-full border p-2 rounded h-48 font-mono"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label className="block mb-1 font-semibold">Image URL</label>
-          <input
-            type="text"
             className="w-full border p-2 rounded"
+            placeholder="Post title"
+            required
+          />
+        </div>
+
+        <div className="mb-3">
+          <label className="block mb-1 font-semibold">Image URL (cover)</label>
+          <input
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
+            className="w-full border p-2 rounded"
+            placeholder="https://..."
           />
         </div>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          {editingPost ? "Update Post" : "Save Post"}
-        </button>
-        {editingPost && (
+
+        <div className="mb-3">
+          <label className="block mb-1 font-semibold">Content (raw HTML)</label>
+          <textarea
+            value={contentHtml}
+            onChange={(e) => setContentHtml(e.target.value)}
+            rows={12}
+            className="w-full border p-2 rounded font-mono"
+            placeholder="<p>Your HTML here...</p>"
+            required
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">
+            {editingPost ? "Update Post" : "Create Post"}
+          </button>
+
+          {editingPost && (
+            <button
+              type="button"
+              className="px-3 py-2 bg-gray-300 rounded"
+              onClick={resetForm}
+            >
+              Cancel
+            </button>
+          )}
+
           <button
             type="button"
-            className="ml-3 px-4 py-2 bg-gray-400 text-white rounded"
+            className="px-3 py-2 bg-gray-100 rounded"
             onClick={() => {
-              setEditingPost(null);
-              setTitle("");
-              setContent("");
-              setImageUrl("");
+              // preview toggles view modal for current unsaved content
+              handleView({
+                title: title || "(untitled)",
+                content_html: contentHtml || "",
+                image_url: imageUrl || null,
+                created_at: new Date().toISOString(),
+              });
             }}
           >
-            Cancel
+            Live preview
           </button>
-        )}
+        </div>
       </form>
 
-      {status && <p className="mb-4">{status}</p>}
+      {/* posts list */}
+      <h2 className="text-xl font-semibold mb-3">All posts</h2>
 
-      {/* --- Posts List --- */}
-      <h2 className="text-xl font-bold mb-3">All Posts</h2>
-      {posts.length === 0 && <p>No posts yet.</p>}
-      <div className="space-y-3">
-        {posts.map((post) => (
-          <div
-            key={post.id}
-            className="flex justify-between items-center p-4 border rounded bg-white"
-          >
-            <div>
-              <h3 className="font-semibold">{post.title}</h3>
-              <p className="text-sm text-gray-500">
-                {new Date(post.created_at).toLocaleString()}
-              </p>
+      {loading ? (
+        <p>Loading posts…</p>
+      ) : posts.length === 0 ? (
+        <p>No posts yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {posts.map((p) => (
+            <div key={p.id} className="flex justify-between items-start gap-4 p-4 border rounded bg-white">
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  {p.image_url ? (
+                    // small thumbnail
+                    // using img (keep small)
+                    <img src={p.image_url} alt={p.title} className="w-20 h-12 object-cover rounded" />
+                  ) : (
+                    <div className="w-20 h-12 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-400">No image</div>
+                  )}
+                  <div>
+                    <div className="font-semibold">{p.title}</div>
+                    <div className="text-xs text-gray-500">{p.slug}</div>
+                  </div>
+                </div>
+
+                <div className="mt-2 text-sm text-gray-600">
+                  Created: {new Date(p.created_at).toLocaleString()}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => handleEdit(p)} className="px-3 py-1 bg-yellow-500 text-white rounded">Edit</button>
+                <button onClick={() => handleDelete(p.id)} className="px-3 py-1 bg-red-600 text-white rounded">Delete</button>
+                <button onClick={() => handleView(p)} className="px-3 py-1 bg-blue-600 text-white rounded">View</button>
+              </div>
             </div>
-            <div className="space-x-2">
-              <button
-                onClick={() => handleEdit(post)}
-                className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(post.id)}
-                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => alert(post.content_html)}
-                className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                View
-              </button>
+          ))}
+        </div>
+      )}
+
+      {/* View modal (simple) */}
+      {viewPost && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-6 bg-black/40">
+          <div className="w-full max-w-3xl bg-white rounded shadow-lg overflow-auto max-h-[90vh]">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">{escapeHtml(viewPost.title)}</h3>
+              <div className="flex gap-2">
+                <a
+                  href={`/post/${viewPost.slug || ""}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 bg-green-600 text-white rounded"
+                >
+                  Open live
+                </a>
+                <button onClick={closeView} className="px-3 py-1 bg-gray-300 rounded">Close</button>
+              </div>
+            </div>
+
+            <div className="p-4">
+              {viewPost.image_url && (
+                <img src={viewPost.image_url} alt={viewPost.title} className="w-full h-56 object-cover rounded mb-4" />
+              )}
+
+              <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: viewPost.content_html }} />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

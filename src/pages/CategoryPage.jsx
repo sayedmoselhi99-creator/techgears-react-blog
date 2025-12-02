@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fetchPostsByLabel } from "/api/blogger";
+
 
 export default function CategoryPage() {
   const { label } = useParams();
