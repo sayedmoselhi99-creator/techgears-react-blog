@@ -1,18 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
 import Home from "./pages/Home";
 import PostPage from "./pages/PostPage";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import CategoryPage from "./pages/CategoryPage";
-
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
-
 import AdminPanel from "./lib/admin/admin-panel";
 import Login from "./lib/admin/login";
-
 import Disclaimer from "./pages/Disclaimer";
 import TermsConditions from "./pages/TermsConditions "; // removed extra space
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -71,6 +67,7 @@ export default function App() {
               path="/admin/*"
               element={user ? <AdminPanel /> : <Navigate to="/login" />}
             />
+
           </Routes>
         </main>
 
