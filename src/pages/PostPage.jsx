@@ -67,12 +67,12 @@ export default function PostPage() {
       </Helmet>
 
       {/* ---------- PAGE CONTENT ---------- */}
-      <article className="max-w-4xl mx-auto px-6 py-10 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+      <article className="max-w-4xl mx-auto px-6 py-10  bg-white dark:bg-gray-900 rounded-lg shadow-sm">
         {post.image_url && (
           <img
             src={post.image_url}
             alt={post.title}
-            className="w-full rounded mb-6"
+            className="w-auto rounded mb-6 mx-auto"
           />
         )}
 
