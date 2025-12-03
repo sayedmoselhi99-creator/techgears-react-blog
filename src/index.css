@@ -19,3 +19,16 @@
 .dark .buy-btn {
   box-shadow: 0 1px 0 rgba(255,255,255,0.03);
 }
+@keyframes rotateAround {
+  0% {
+    transform: rotate(0deg) translateX(20px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(20px) rotate(-360deg);
+  }
+}
+
+.circular-motion {
+  animation: rotateAround 6s linear infinite;
+}
+

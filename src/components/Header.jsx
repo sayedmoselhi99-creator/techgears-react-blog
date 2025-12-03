@@ -14,7 +14,7 @@ export default function Header() {
           <img
             src="/logo.png"
             alt="Tech Gears Finds4You"
-            className="h-12 w-auto transition-transform duration-300 hover:scale-105"
+            className="h-12 w-auto transition-transform duration-300 hover:scale-105 circular-motion"
           />
           <div className="flex flex-col">
             <h1 className="text-lg font-bold text-gray-900 tracking-tight">
