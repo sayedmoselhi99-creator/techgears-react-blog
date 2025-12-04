@@ -18,7 +18,7 @@ export default function PostCard({ post }) {
             src={image_url}
             alt={title || "Post image"}
             loading="lazy"
-            className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500 ease-out  circular-motion"
+            className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500 ease-out"
           />
         ) : (
           <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">

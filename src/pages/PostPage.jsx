@@ -72,7 +72,7 @@ export default function PostPage() {
           <img
             src={post.image_url}
             alt={post.title}
-            className="w-auto rounded mb-6 mx-auto circular-motion"
+            className="w-auto rounded mb-6 mx-auto"
           />
         )}
 
